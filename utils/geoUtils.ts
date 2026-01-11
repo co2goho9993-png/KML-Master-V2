@@ -5,19 +5,9 @@ function kmlColorToHex(kmlColor: string): string {
   const r = kmlColor.substring(6, 8);
   const g = kmlColor.substring(4, 6);
   const b = kmlColor.substring(2, 4);
-  const hex = `#${r}${g}${b}`;
-  // Avoid pure white as a fallback color for multicolor if it's the only color
-  return hex.toLowerCase() === '#ffffff' ? '' : hex;
+  return `#${r}${g}${b}`;
 }
 
-function getRandomColor() {
-  const h = Math.floor(Math.random() * 360);
-  const s = 70 + Math.random() * 30;
-  const l = 50 + Math.random() * 20;
-  return `hsl(${h}, ${s}%, ${l}%)`;
-}
-
-// Convert HSL to Hex
 function hslToHex(h: number, s: number, l: number) {
   l /= 100;
   const a = s * Math.min(l, 1 - l) / 100;
@@ -50,14 +40,14 @@ export function parseKml(kmlString: string): any {
       const styleId = styleUrl.replace('#', '');
       const styleElement = kml.getElementById(styleId);
       if (styleElement) {
-        const colorTag = styleElement.getElementsByTagName("color")[0];
+        const colorTag = styleElement.getElementsByTagName("color")[0] || styleElement.getElementsByTagName("PolyStyle")[0]?.getElementsByTagName("color")[0] || styleElement.getElementsByTagName("LineStyle")[0]?.getElementsByTagName("color")[0];
         if (colorTag) baseFeatureColor = kmlColorToHex(colorTag.textContent || '');
       }
     }
     
     if (!baseFeatureColor) {
-      const inlineColor = pm.getElementsByTagName("color")[0]?.textContent;
-      if (inlineColor) baseFeatureColor = kmlColorToHex(inlineColor);
+      const colorTag = pm.getElementsByTagName("color")[0];
+      if (colorTag) baseFeatureColor = kmlColorToHex(colorTag.textContent || '');
     }
 
     const geometries = ['LineString', 'Polygon', 'Point'];
@@ -71,8 +61,6 @@ export function parseKml(kmlString: string): any {
         });
 
         if (coordinates.length > 0) {
-          // Если цвет не задан в KML, генерируем новый случайный цвет для КАЖДОГО сегмента/объекта
-          // Это обеспечит максимальную разноцветность в режиме MultiColor
           const segmentColor = baseFeatureColor || hslToHex(Math.floor(Math.random() * 360), 80, 60);
 
           geoJson.features.push({

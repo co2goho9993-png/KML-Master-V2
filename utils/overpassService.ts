@@ -4,6 +4,7 @@ import L from 'leaflet';
 export interface RoadFetchOptions {
   includeFederal: boolean;
   includeRegional: boolean;
+  signal?: AbortSignal;
 }
 
 const OVERPASS_ENDPOINTS = [
@@ -13,178 +14,261 @@ const OVERPASS_ENDPOINTS = [
 ];
 
 /**
- * Получение точной границы города или региона по OSM ID (или массиву ID).
- * При передаче массива ID возвращает один объект Feature с MultiLineString геометрией.
+ * Вспомогательная функция для сшивки разрозненных сегментов путей в замкнутые контуры.
  */
-export async function fetchBoundaryByOsmId(osmId: number | number[], osmType: string): Promise<any | null> {
+function stitchWaysToRings(ways: any[][]): any[][] {
+  if (ways.length === 0) return [];
+  
+  const segments = ways.map(w => [...w]);
+  const rings: any[][] = [];
+  
+  while (segments.length > 0) {
+    let currentRing = segments.shift()!;
+    let added = true;
+    
+    while (added) {
+      added = false;
+      const start = currentRing[0];
+      const end = currentRing[currentRing.length - 1];
+      
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        const sSeg = seg[0];
+        const eSeg = seg[seg.length - 1];
+        
+        const isSame = (p1: any, p2: any) => Math.abs(p1[0] - p2[0]) < 1e-7 && Math.abs(p1[1] - p2[1]) < 1e-7;
+
+        if (isSame(end, sSeg)) {
+          currentRing.push(...seg.slice(1));
+          segments.splice(i, 1);
+          added = true;
+          break;
+        } else if (isSame(end, eSeg)) {
+          currentRing.push(...[...seg].reverse().slice(1));
+          segments.splice(i, 1);
+          added = true;
+          break;
+        } else if (isSame(start, eSeg)) {
+          currentRing.unshift(...seg.slice(0, -1));
+          segments.splice(i, 1);
+          added = true;
+          break;
+        } else if (isSame(start, sSeg)) {
+          currentRing.unshift(...[...seg].reverse().slice(0, -1));
+          segments.splice(i, 1);
+          added = true;
+          break;
+        }
+      }
+    }
+    rings.push(currentRing);
+  }
+  return rings;
+}
+
+/**
+ * Получение точной границы города или региона по OSM ID.
+ */
+export async function fetchBoundaryByOsmId(osmId: number | number[], osmType: string, externalSignal?: AbortSignal): Promise<any | null> {
   const ids = Array.isArray(osmId) ? osmId : [osmId];
   
-  // Формируем запрос для получения всех геометрических данных объекта
-  const queryParts = ids.map(id => `${osmType}(${id});`).join('');
-  
-  const query = `
-    [out:json][timeout:90];
-    (
-      ${queryParts}
-    );
-    out geom;
-  `;
+  const runQuery = async (q: string) => {
+    for (const url of OVERPASS_ENDPOINTS) {
+      if (externalSignal?.aborted) return null;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-  for (const url of OVERPASS_ENDPOINTS) {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        body: query,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
-      if (!response.ok) continue;
-
-      const data = await response.json();
-      if (!data.elements || data.elements.length === 0) continue;
-
-      const allLineSegments: any[] = [];
-      let commonName = "";
-      let commonTags = {};
-
-      data.elements.forEach((el: any) => {
-        const tags = el.tags || {};
-        if (!commonName) commonName = tags.name || tags['name:ru'] || tags['official_name'] || "Граница";
-        commonTags = { ...commonTags, ...tags };
-
-        if (el.type === 'node') {
-          // Игнорируем точечные данные для границ, если это не единственное, что есть
-          if (data.elements.length === 1) {
-             allLineSegments.push([[el.lon, el.lat]]);
-          }
-        } else if (el.type === 'way' && el.geometry) {
-          allLineSegments.push(el.geometry.map((pt: any) => [pt.lon, pt.lat]));
-        } else if (el.type === 'relation' && el.members) {
-          el.members.forEach((m: any) => {
-            // Для релейшена собираем все внешние пути (role: outer)
-            if (m.type === 'way' && m.geometry && (m.role === 'outer' || !m.role)) {
-              allLineSegments.push(m.geometry.map((pt: any) => [pt.lon, pt.lat]));
-            }
-          });
-        }
-      });
-
-      if (allLineSegments.length === 0) return null;
-
-      // Если в итоге получилась только точка
-      if (data.elements[0].type === 'node' && allLineSegments[0].length === 1) {
-        return {
-          type: "Feature",
-          properties: { name: commonName, ...commonTags },
-          geometry: { type: "Point", coordinates: allLineSegments[0][0] }
-        };
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          body: `data=${encodeURIComponent(q)}`,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          signal: externalSignal || controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        if (response.ok) return await response.json();
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError' && externalSignal?.aborted) return null;
       }
+    }
+    return null;
+  };
 
-      // Возвращаем как MultiLineString для точного отображения границ
-      return {
-        type: "Feature",
-        properties: { 
-          name: commonName, 
-          id: `osm-${ids.join('-')}`, 
-          ...commonTags 
-        },
-        geometry: {
-          type: "MultiLineString",
-          coordinates: allLineSegments
-        }
-      };
-    } catch (err) {
-      console.warn(`Boundary fetch failed for ${url}`, err);
+  let query = `[out:json][timeout:90]; (`;
+  ids.forEach(id => {
+    query += `${osmType}(${id});`;
+  });
+  query += `); out geom qt;`;
+
+  let data = await runQuery(query);
+
+  if (data && data.elements.length > 0 && data.elements[0].type === 'node') {
+    const node = data.elements[0];
+    const boundaryQuery = `[out:json][timeout:90];
+      is_in(${node.lat},${node.lon})->.a;
+      relation(area.a)["boundary"="administrative"]["admin_level"~"^[4568]$"];
+      out geom qt;`;
+    const boundaryData = await runQuery(boundaryQuery);
+    if (boundaryData && boundaryData.elements.length > 0) {
+      const sorted = boundaryData.elements.sort((a: any, b: any) => {
+          const lvA = parseInt(a.tags?.admin_level || "10");
+          const lvB = parseInt(b.tags?.admin_level || "10");
+          return lvB - lvA;
+      });
+      data = { elements: [sorted[0]] };
     }
   }
-  return null;
-}
 
-export async function fetchSettlementsForRegion(regionFeature: any): Promise<any> {
-  const geoJsonLayer = L.geoJSON(regionFeature);
-  const bounds = geoJsonLayer.getBounds();
-  if (!bounds.isValid()) return { type: "FeatureCollection", features: [] };
+  if (!data || !data.elements || data.elements.length === 0) return null;
 
-  const south = bounds.getSouth();
-  const west = bounds.getWest();
-  const north = bounds.getNorth();
-  const east = bounds.getEast();
+  const rawWays: any[][] = [];
+  let commonName = "";
+  let commonTags = {};
 
-  const query = `
-    [out:json][timeout:150];
-    (
-      relation["place"~"city|town|village"](${south},${west},${north},${east});
-      way["place"~"city|town|village"](${south},${west},${north},${east});
-    );
-    out geom;
-  `;
+  data.elements.forEach((el: any) => {
+    const tags = el.tags || {};
+    if (!commonName) commonName = tags.name || tags['name:ru'] || tags['official_name'] || "Объект";
+    commonTags = { ...commonTags, ...tags };
 
-  for (const url of OVERPASS_ENDPOINTS) {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        body: query,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
-      if (!response.ok) continue;
-      const data = await response.json();
-      if (!data.elements) continue;
-
-      const features: any[] = [];
-      data.elements.forEach((el: any) => {
-        const tags = el.tags || {};
-        const name = tags.name || tags.official_name || "Граница";
-        if (el.type === 'way' && el.geometry) {
-          features.push({
-            type: "Feature",
-            properties: { name, ...tags },
-            geometry: { type: "LineString", coordinates: el.geometry.map((pt: any) => [pt.lon, pt.lat]) }
-          });
+    if (el.type === 'way' && el.geometry) {
+      rawWays.push(el.geometry.map((pt: any) => [pt.lon, pt.lat]));
+    } else if (el.type === 'relation' && el.members) {
+      el.members.forEach((m: any) => {
+        if (m.type === 'way' && m.geometry && (m.role === 'outer' || !m.role)) {
+          rawWays.push(m.geometry.map((pt: any) => [pt.lon, pt.lat]));
         }
       });
-      return { type: "FeatureCollection", features };
-    } catch (err) {}
+    }
+  });
+
+  if (rawWays.length === 0 && data.elements[0].type === 'node') {
+    return {
+      type: "Feature",
+      properties: { name: commonName, ...commonTags, osmId: ids[0], osmType: 'node' },
+      geometry: { type: "Point", coordinates: [data.elements[0].lon, data.elements[0].lat] }
+    };
   }
-  return { type: "FeatureCollection", features: [] };
+
+  if (rawWays.length === 0) return null;
+
+  const rings = stitchWaysToRings(rawWays);
+
+  return {
+    type: "Feature",
+    properties: { 
+        name: commonName, 
+        id: `osm-${ids.join('-')}`, 
+        osmId: ids[0], 
+        osmType: data.elements[0].type,
+        ...commonTags 
+    },
+    geometry: { 
+      type: rings.length > 1 ? "MultiPolygon" : "Polygon", 
+      coordinates: rings.length > 1 ? rings.map(r => [r]) : [rings[0]]
+    }
+  };
 }
 
+/**
+ * Получение дорог СТРОГО внутри границ региона.
+ * Оптимизировано: загружаются только дороги с ref (маркировкой), что отсекает улицы.
+ * Добавлен модификатор 'qt' для ускорения обработки на сервере Overpass.
+ */
 export async function fetchRoadsForRegion(regionFeature: any, options: RoadFetchOptions): Promise<any> {
   if (!options.includeFederal && !options.includeRegional) return { type: "FeatureCollection", features: [] };
-  const geoJsonLayer = L.geoJSON(regionFeature);
-  const bounds = geoJsonLayer.getBounds();
-  if (!bounds.isValid()) return { type: "FeatureCollection", features: [] };
+  if (options.signal?.aborted) return { type: "FeatureCollection", features: [] };
+  
+  const osmId = regionFeature.properties.osmId;
+  const osmType = regionFeature.properties.osmType || 'relation';
+  const name = regionFeature.properties.name;
+  
+  let areaSearch = '';
+  if (osmId) {
+    const baseId = Array.isArray(osmId) ? osmId[0] : osmId;
+    const areaId = (osmType === 'way' ? 2400000000 : 3600000000) + baseId;
+    areaSearch = `area(${areaId})`;
+  } else if (name) {
+    areaSearch = `area["name"~"${name}"]["admin_level"~"^[45]$"]`;
+  }
 
-  const south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
-  const highwayTypes = [];
-  if (options.includeFederal) highwayTypes.push("motorway", "trunk");
-  if (options.includeRegional) highwayTypes.push("primary", "secondary");
-  const typesRegex = highwayTypes.join("|");
+  if (!areaSearch) return { type: "FeatureCollection", features: [] };
+
+  // Фильтры:
+  // motorway/trunk - федеральные
+  // primary/secondary/tertiary - региональные только при наличии ref
+  const fedRefRegex = '^[MРAМРА]-.*'; 
+  const regRefRegex = '^[0-9].*'; 
+
+  let roadFilter = '';
+  if (options.includeFederal && options.includeRegional) {
+    roadFilter = `(
+      way["highway"~"^(motorway|trunk)$"](area.searchArea);
+      way["highway"~"^(primary|secondary|tertiary)$"]["ref"](area.searchArea);
+    );`;
+  } else if (options.includeFederal) {
+    roadFilter = `(
+      way["highway"~"^(motorway|trunk)$"](area.searchArea);
+      way["highway"~"^(primary|secondary)$"]["ref"~"${fedRefRegex}"](area.searchArea);
+    );`;
+  } else if (options.includeRegional) {
+    roadFilter = `way["highway"~"^(primary|secondary|tertiary)$"]["ref"~"${regRefRegex}"](area.searchArea);`;
+  }
 
   const query = `
-    [out:json][timeout:180];
-    (way["highway"~"${typesRegex}"](${south},${west},${north},${east}););
-    out geom;
+    [out:json][timeout:120];
+    (${areaSearch};)->.searchArea;
+    (
+      ${roadFilter}
+    );
+    out geom qt;
   `;
 
   for (const url of OVERPASS_ENDPOINTS) {
+    if (options.signal?.aborted) return { type: "FeatureCollection", features: [] };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     try {
       const response = await fetch(url, {
         method: 'POST',
-        body: query,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        body: `data=${encodeURIComponent(query)}`,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        signal: options.signal || controller.signal
       });
+      
+      clearTimeout(timeoutId);
       if (!response.ok) continue;
+
       const data = await response.json();
       const features = data.elements?.filter((el: any) => el.geometry).map((el: any) => {
         const tags = el.tags || {};
-        const isFederal = (tags.highway || "").includes('motorway') || (tags.highway || "").includes('trunk');
+        const ref = tags.ref || "";
+        const h = tags.highway || "";
+        
+        const isFederal = /^[MРAМРА]-/.test(ref) || h === 'motorway' || h === 'trunk';
+        
         return {
           type: "Feature",
-          properties: { ...tags, road_category: isFederal ? 'federal' : 'regional' },
-          geometry: { type: "LineString", coordinates: el.geometry.map((pt: any) => [pt.lon, pt.lat]) }
+          properties: { 
+            ...tags, 
+            name: tags.name || ref || "Трасса",
+            road_category: isFederal ? 'federal' : 'regional' 
+          },
+          geometry: { 
+            type: "LineString", 
+            coordinates: el.geometry.map((pt: any) => [pt.lon, pt.lat]) 
+          }
         };
       });
+
       return { type: "FeatureCollection", features: features || [] };
-    } catch (err) {}
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError' && options.signal?.aborted) return { type: "FeatureCollection", features: [] };
+    }
   }
   return { type: "FeatureCollection", features: [] };
 }
