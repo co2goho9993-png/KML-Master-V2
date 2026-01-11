@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { 
   FileUp, 
   Map as MapIcon, 
@@ -29,6 +29,8 @@ import { KmlLayerData, MapMode } from '../types';
 import { parseKml } from '../utils/geoUtils';
 
 interface SidebarProps {
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
   kmlLayers: KmlLayerData[];
   onAddKml: (name: string, geoJson: any) => void;
   onRemoveKml: (id: string) => void;
@@ -63,6 +65,8 @@ const SPECIAL_REGIONS = [
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({
+  isCollapsed,
+  onToggleCollapse,
   kmlLayers,
   onAddKml,
   onRemoveKml,
@@ -85,13 +89,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSetDimMap,
   onCitySelect,
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [regions, setRegions] = useState<any[]>([]);
-  const [regionSearch, setRegionSearch] = useState('');
-  const [citySearch, setCitySearch] = useState('');
-  const [cityResults, setCityResults] = useState<any[]>([]);
-  const [isCitySearching, setIsCitySearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const [regions, setRegions] = React.useState<any[]>([]);
+  const [regionSearch, setRegionSearch] = React.useState('');
+  const [citySearch, setCitySearch] = React.useState('');
+  const [cityResults, setCityResults] = React.useState<any[]>([]);
+  const [isCitySearching, setIsCitySearching] = React.useState(false);
+  const [searchError, setSearchError] = React.useState<string | null>(null);
   const searchTimeout = useRef<any>(null);
   const cityInputRef = useRef<HTMLInputElement>(null);
   const regionInputRef = useRef<HTMLInputElement>(null);
@@ -119,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const expandAndFocus = (type: 'city' | 'region') => {
-    setIsCollapsed(false);
+    if (isCollapsed) onToggleCollapse();
     setTimeout(() => {
       if (type === 'city') cityInputRef.current?.focus();
       if (type === 'region') regionInputRef.current?.focus();
@@ -228,7 +231,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       const geoJson = parseKml(text);
       if (geoJson) {
         onAddKml(file.name, geoJson);
-        setIsCollapsed(false); 
+        if (isCollapsed) onToggleCollapse(); 
       }
     };
     reader.readAsText(file);
@@ -244,17 +247,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className={`${isCollapsed ? 'w-16' : 'w-80'} h-full bg-[#111] border-r border-[#222] flex flex-col z-[2000] shadow-2xl relative transition-all duration-300 ease-in-out`}>
-      {/* Toggle Button */}
       <button 
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={onToggleCollapse}
         className="absolute -right-3 top-20 bg-[#222] border border-[#333] rounded-full p-1 text-gray-400 hover:text-white hover:bg-[#333] transition-all z-[2001]"
       >
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      {/* Header */}
       <div 
-        onClick={() => isCollapsed && setIsCollapsed(false)}
+        onClick={() => isCollapsed && onToggleCollapse()}
         className={`p-6 border-b border-[#222] cursor-pointer ${isCollapsed ? 'items-center px-0 flex flex-col justify-center' : ''}`}
       >
         {!isCollapsed ? (
@@ -272,7 +273,6 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 ${isCollapsed ? 'px-2' : ''}`}>
-        {/* ИМПОРТ KML */}
         <section className="space-y-3">
           {!isCollapsed && (
             <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -315,7 +315,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </section>
 
-        {/* ВЫБОР ОБЛАСТИ */}
         <section>
           {!isCollapsed ? (
             <div className="flex items-center justify-between mb-3">
@@ -413,7 +412,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </section>
 
-        {/* ПОИСК ГОРОДА */}
         <section className="relative">
           {!isCollapsed ? (
             <div className="flex items-center justify-between mb-3">
@@ -504,7 +502,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </section>
 
-        {/* СЛОИ И ВИД */}
         <section className="space-y-4">
           {!isCollapsed && (
             <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -549,7 +546,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </section>
 
-        {/* СПИСОК KML */}
         {!isCollapsed && (
           <section>
             <h2 className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest flex items-center gap-2">

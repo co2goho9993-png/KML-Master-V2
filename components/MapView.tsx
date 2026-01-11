@@ -29,6 +29,19 @@ interface MapViewProps {
   dimMap: boolean;
 }
 
+const MapResizeHandler: React.FC = () => {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
+  return null;
+};
+
 const MapAssets: React.FC<{ selectedRegions: any[], dimMap: boolean }> = ({ selectedRegions, dimMap }) => {
   const map = useMap();
   const [clipPathId] = useState(`map-clip-${Math.random().toString(36).substr(2, 9)}`);
@@ -315,7 +328,6 @@ const MapView: React.FC<MapViewProps> = ({
   }, []);
 
   const YANDEX_MAP = "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&lang=ru_RU";
-  // Использование CartoDB Voyager No Labels: голубая вода, зеленые леса, без подписей
   const CARTODB_VOYAGER = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png";
   const CARTODB_DARK = "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png";
 
@@ -373,6 +385,7 @@ const MapView: React.FC<MapViewProps> = ({
         zoomDelta={1}
         fadeAnimation={false}
       >
+        <MapResizeHandler />
         <ViewTracker onViewChange={setCurrentView} />
         
         {mapMode === MapMode.STREETS && (

@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [showRegionalRoads, setShowRegionalRoads] = useState(false);
   const [dimMap, setDimMap] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mapTarget, setMapTarget] = useState<{lat: number, lon: number, bounds?: any, osmId?: number, osmType?: string} | null>(null);
 
   const handleAddKml = useCallback((name: string, geoJson: any) => {
@@ -71,7 +72,6 @@ const App: React.FC = () => {
     setSelectedCities(prev => prev.filter(c => (c.properties.id || c.properties.name) === cityId ? false : true));
   }, []);
 
-  // Выбор города через поиск
   const handleCitySelect = useCallback(async (target: {lat: number, lon: number, bounds?: any, osmId?: number, osmType?: string} | null) => {
     if (!target) return;
     setMapTarget(target);
@@ -95,6 +95,8 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden">
       <Sidebar 
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         kmlLayers={kmlLayers}
         onAddKml={handleAddKml}
         onRemoveKml={handleRemoveKml}
@@ -119,7 +121,7 @@ const App: React.FC = () => {
         onCitySelect={handleCitySelect}
       />
       
-      <main className="flex-1 relative">
+      <main className="flex-1 relative overflow-hidden">
         <MapView 
           kmlLayers={kmlLayers}
           selectedRegions={selectedRegions}
