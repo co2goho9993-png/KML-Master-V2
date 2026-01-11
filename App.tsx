@@ -8,13 +8,14 @@ import { fetchBoundaryByOsmId } from './utils/overpassService';
 const App: React.FC = () => {
   const [kmlLayers, setKmlLayers] = useState<KmlLayerData[]>([]);
   const [selectedRegions, setSelectedRegions] = useState<any[]>([]);
+  const [selectedCities, setSelectedCities] = useState<any[]>([]);
   const [mapMode, setMapMode] = useState<MapMode>(MapMode.STREETS);
   const [useMultiColor, setUseMultiColor] = useState(true);
   const [showRoads, setShowRoads] = useState(false);
   const [showRegionalRoads, setShowRegionalRoads] = useState(false);
+  const [dimMap, setDimMap] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [mapTarget, setMapTarget] = useState<{lat: number, lon: number, bounds?: any, osmId?: number, osmType?: string} | null>(null);
-  const [focusedCityBoundary, setFocusedCityBoundary] = useState<any>(null);
 
   const handleAddKml = useCallback((name: string, geoJson: any) => {
     const newLayer: KmlLayerData = {
@@ -40,21 +41,14 @@ const App: React.FC = () => {
   }, []);
 
   const handleSelectRegion = useCallback(async (region: any) => {
-    if (!region) {
-      setSelectedRegions([]);
-      return;
-    }
+    if (!region) return;
 
     let finalRegion = region;
-
-    // Если у региона есть osmId и нет геометрии, подгружаем её
     if (region.properties.osmId && !region.geometry) {
       setIsLoading(true);
       try {
         const boundary = await fetchBoundaryByOsmId(region.properties.osmId, 'relation');
-        if (boundary) {
-          finalRegion = boundary;
-        }
+        if (boundary) finalRegion = boundary;
       } catch (err) {
         console.error("Error fetching special region boundary", err);
       } finally {
@@ -64,8 +58,7 @@ const App: React.FC = () => {
 
     setSelectedRegions(prev => {
       const regionId = finalRegion.properties.id || finalRegion.properties.name;
-      const exists = prev.find(r => (r.properties.id || r.properties.name) === regionId);
-      if (exists) return prev;
+      if (prev.find(r => (r.properties.id || r.properties.name) === regionId)) return prev;
       return [...prev, finalRegion];
     });
   }, []);
@@ -74,20 +67,30 @@ const App: React.FC = () => {
     setSelectedRegions(prev => prev.filter(r => (r.properties.id || r.properties.name) !== regionId));
   }, []);
 
-  // Загрузка границ города при выборе из поиска
-  useEffect(() => {
-    if (mapTarget?.osmId && mapTarget?.osmType) {
-      setIsLoading(true);
-      setFocusedCityBoundary(null);
-      fetchBoundaryByOsmId(mapTarget.osmId, mapTarget.osmType)
-        .then(boundary => {
-          if (boundary) setFocusedCityBoundary(boundary);
-        })
-        .finally(() => setIsLoading(false));
-    } else {
-      setFocusedCityBoundary(null);
+  const handleRemoveCity = useCallback((cityId: string) => {
+    setSelectedCities(prev => prev.filter(c => (c.properties.id || c.properties.name) === cityId ? false : true));
+  }, []);
+
+  // Выбор города через поиск
+  const handleCitySelect = useCallback(async (target: {lat: number, lon: number, bounds?: any, osmId?: number, osmType?: string} | null) => {
+    if (!target) return;
+    setMapTarget(target);
+    setIsLoading(true);
+    try {
+      const boundary = await fetchBoundaryByOsmId(target.osmId!, target.osmType!);
+      if (boundary) {
+        setSelectedCities(prev => {
+          const cityId = boundary.properties.id || boundary.properties.name;
+          if (prev.find(c => (c.properties.id || c.properties.name) === cityId)) return prev;
+          return [...prev, boundary];
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching city boundary", err);
+    } finally {
+      setIsLoading(false);
     }
-  }, [mapTarget]);
+  }, []);
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden">
@@ -100,6 +103,8 @@ const App: React.FC = () => {
         selectedRegions={selectedRegions}
         onSelectRegion={handleSelectRegion}
         onRemoveRegion={handleRemoveRegion}
+        selectedCities={selectedCities}
+        onRemoveCity={handleRemoveCity}
         mapMode={mapMode}
         onSetMapMode={setMapMode}
         useMultiColor={useMultiColor}
@@ -108,14 +113,17 @@ const App: React.FC = () => {
         onSetShowRoads={setShowRoads}
         showRegionalRoads={showRegionalRoads}
         onSetShowRegionalRoads={setShowRegionalRoads}
+        dimMap={dimMap}
+        onSetDimMap={setDimMap}
         isLoading={isLoading}
-        onCitySelect={setMapTarget}
+        onCitySelect={handleCitySelect}
       />
       
       <main className="flex-1 relative">
         <MapView 
           kmlLayers={kmlLayers}
           selectedRegions={selectedRegions}
+          selectedCities={selectedCities}
           mapMode={mapMode}
           useMultiColor={useMultiColor}
           showRoads={showRoads}
@@ -123,14 +131,14 @@ const App: React.FC = () => {
           showSettlements={false}
           onLoadingChange={setIsLoading}
           mapTarget={mapTarget}
-          focusedCityBoundary={focusedCityBoundary}
+          dimMap={dimMap}
         />
         
         {isLoading && (
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[1000] flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[1000] flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center gap-4 bg-[#111] p-8 rounded-3xl border border-[#222] shadow-2xl">
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-white font-medium italic">Загрузка векторных данных OSM...</p>
+              <p className="text-white font-bold tracking-tight">Обработка векторов OSM...</p>
             </div>
           </div>
         )}

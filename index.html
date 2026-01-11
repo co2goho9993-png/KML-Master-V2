@@ -16,13 +16,29 @@
             margin: 0;
             overflow: hidden;
         }
-        .leaflet-container {
-            background: #111 !important;
+        
+        /* Устранение белых линий между тайлами */
+        .leaflet-tile {
+            /* Отрицательный маржин и прозрачный аутлайн перекрывают микро-разрывы рендеринга */
+            margin: -0.5px !important;
+            outline: 1px solid transparent;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
         }
-        /* Стилизация стандартной карты под серый вектор */
+
+        /* Дополнительная защита от швов в контейнере */
+        .leaflet-tile-container {
+            will-change: transform;
+        }
+
+        .leaflet-container {
+            background: #f4f1ed !important; 
+        }
+        
         .grayscale-vector-map {
             filter: grayscale(1) invert(0.9) brightness(0.9) contrast(1.2) !important;
         }
+
         .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
         }
@@ -32,9 +48,6 @@
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #333;
             border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #444;
         }
     </style>
 <script type="importmap">
