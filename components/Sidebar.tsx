@@ -20,7 +20,10 @@ import {
   RotateCcw,
   Moon,
   Globe,
-  Sun
+  Sun,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown
 } from 'lucide-react';
 import { KmlLayerData, MapMode } from '../types';
 import { parseKml } from '../utils/geoUtils';
@@ -82,6 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSetDimMap,
   onCitySelect,
 }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [regions, setRegions] = useState<any[]>([]);
   const [regionSearch, setRegionSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
@@ -89,6 +93,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isCitySearching, setIsCitySearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const searchTimeout = useRef<any>(null);
+  const cityInputRef = useRef<HTMLInputElement>(null);
+  const regionInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch('https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/russia.geojson')
@@ -111,6 +117,14 @@ const Sidebar: React.FC<SidebarProps> = ({
         setRegions(SPECIAL_REGIONS);
       });
   }, []);
+
+  const expandAndFocus = (type: 'city' | 'region') => {
+    setIsCollapsed(false);
+    setTimeout(() => {
+      if (type === 'city') cityInputRef.current?.focus();
+      if (type === 'region') regionInputRef.current?.focus();
+    }, 350);
+  };
 
   const handleCitySearch = (query: string) => {
     setCitySearch(query);
@@ -212,7 +226,10 @@ const Sidebar: React.FC<SidebarProps> = ({
     reader.onload = async (event) => {
       const text = event.target?.result as string;
       const geoJson = parseKml(text);
-      if (geoJson) onAddKml(file.name, geoJson);
+      if (geoJson) {
+        onAddKml(file.name, geoJson);
+        setIsCollapsed(false); 
+      }
     };
     reader.readAsText(file);
     e.target.value = ''; 
@@ -226,76 +243,148 @@ const Sidebar: React.FC<SidebarProps> = ({
   const triggerExport = () => window.dispatchEvent(new CustomEvent('trigger-export'));
 
   return (
-    <div className="w-80 h-full bg-[#111] border-r border-[#222] flex flex-col z-[2000] shadow-2xl relative">
-      <div className="p-6 border-b border-[#222]">
-        <h1 className="text-xl font-black tracking-tighter bg-gradient-to-br from-blue-400 to-indigo-600 bg-clip-text text-transparent leading-none">
-          KML-МАСТЕР
-        </h1>
-        <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-[0.2em] font-bold">Карты без заморочек</p>
+    <div className={`${isCollapsed ? 'w-16' : 'w-80'} h-full bg-[#111] border-r border-[#222] flex flex-col z-[2000] shadow-2xl relative transition-all duration-300 ease-in-out`}>
+      {/* Toggle Button */}
+      <button 
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="absolute -right-3 top-20 bg-[#222] border border-[#333] rounded-full p-1 text-gray-400 hover:text-white hover:bg-[#333] transition-all z-[2001]"
+      >
+        {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
+
+      {/* Header */}
+      <div 
+        onClick={() => isCollapsed && setIsCollapsed(false)}
+        className={`p-6 border-b border-[#222] cursor-pointer ${isCollapsed ? 'items-center px-0 flex flex-col justify-center' : ''}`}
+      >
+        {!isCollapsed ? (
+          <>
+            <h1 className="text-xl font-black tracking-tighter bg-gradient-to-br from-blue-400 to-indigo-600 bg-clip-text text-transparent leading-none">
+              KML-МАСТЕР
+            </h1>
+            <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-[0.2em] font-bold">Карты без заморочек</p>
+          </>
+        ) : (
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center">
+            <span className="text-white text-xs font-black">K</span>
+          </div>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+      <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 ${isCollapsed ? 'px-2' : ''}`}>
         {/* ИМПОРТ KML */}
         <section className="space-y-3">
-          <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-            <FileUp size={12} /> ИМПОРТ KML
-          </h2>
-          <label className="flex flex-col items-center justify-center w-full h-20 border-2 border-dashed border-[#222] hover:border-blue-500/50 hover:bg-blue-500/5 rounded-xl transition-all cursor-pointer group">
-            <input type="file" accept=".kml" className="hidden" onChange={handleFileUpload} />
-            <FileUp size={20} className="text-gray-600 group-hover:text-blue-400 mb-1" />
-            <span className="text-[11px] text-gray-500 group-hover:text-blue-400 font-medium">Загрузить файл</span>
-          </label>
+          {!isCollapsed && (
+            <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+              <FileUp size={12} /> ИМПОРТ KML
+            </h2>
+          )}
           
-          <button onClick={() => onSetMultiColor(!useMultiColor)} className={`w-full flex items-center justify-between p-2 bg-[#1a1a1a] rounded-lg border transition-all ${useMultiColor ? 'border-amber-500/50 bg-amber-500/5' : 'border-[#222]'}`}>
-            <div className="flex items-center gap-2">
-              <Palette size={14} className={useMultiColor ? 'text-amber-400' : 'text-gray-500'} />
-              <span className="text-[11px] font-medium text-gray-400">Разноцветность объектов</span>
-            </div>
-            <div className={`w-8 h-4 rounded-full relative transition-colors ${useMultiColor ? 'bg-amber-500' : 'bg-[#333]'}`}>
-              <div className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200" style={{ transform: `translateX(${useMultiColor ? '18px' : '2px'})` }} />
-            </div>
-          </button>
+          {!isCollapsed ? (
+            <>
+              <label className="flex flex-col items-center justify-center w-full h-20 border-2 border-dashed border-[#222] hover:border-blue-500/50 hover:bg-blue-500/5 rounded-xl transition-all cursor-pointer group">
+                <input type="file" accept=".kml" className="hidden" onChange={handleFileUpload} />
+                <FileUp size={20} className="text-gray-600 group-hover:text-blue-400 mb-1" />
+                <span className="text-[11px] text-gray-500 group-hover:text-blue-400 font-medium">Загрузить файл</span>
+              </label>
+              
+              <button onClick={() => onSetMultiColor(!useMultiColor)} className={`w-full flex items-center justify-between p-2 bg-[#1a1a1a] rounded-lg border transition-all ${useMultiColor ? 'border-amber-500/50 bg-amber-500/5' : 'border-[#222]'}`}>
+                <div className="flex items-center gap-2">
+                  <Palette size={14} className={useMultiColor ? 'text-amber-400' : 'text-gray-500'} />
+                  <span className="text-[11px] font-medium text-gray-400">Разноцветность</span>
+                </div>
+                <div className={`w-8 h-4 rounded-full relative transition-colors ${useMultiColor ? 'bg-amber-500' : 'bg-[#333]'}`}>
+                  <div className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200" style={{ transform: `translateX(${useMultiColor ? '18px' : '2px'})` }} />
+                </div>
+              </button>
+            </>
+          ) : (
+             <div className="flex flex-col gap-2 items-center">
+                <label className="p-2 rounded-lg bg-[#1a1a1a] border border-[#222] text-gray-500 hover:text-blue-400 cursor-pointer" title="Загрузить KML">
+                   <input type="file" accept=".kml" className="hidden" onChange={handleFileUpload} />
+                   <FileUp size={18} />
+                </label>
+                <button 
+                  onClick={() => onSetMultiColor(!useMultiColor)} 
+                  className={`p-2 rounded-lg border transition-all ${useMultiColor ? 'border-amber-500/50 bg-amber-500/5 text-amber-400' : 'border-[#222] text-gray-500'}`} 
+                  title="Разноцветность"
+                >
+                   <Palette size={18} />
+                </button>
+             </div>
+          )}
         </section>
 
         {/* ВЫБОР ОБЛАСТИ */}
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-              <Layers size={12} /> ВЫБОР ОБЛАСТИ
-            </h2>
-            {selectedRegions.length > 0 && (
-              <button onClick={() => selectedRegions.forEach(r => onRemoveRegion(r.properties.id || r.properties.name))} className="text-[9px] text-red-500/60 hover:text-red-500 font-bold uppercase transition-colors flex items-center gap-1">
-                <RotateCcw size={10} /> Сброс
-              </button>
-            )}
-          </div>
-          <div className="relative mb-2">
-            <input 
-              type="text" 
-              placeholder="Поиск региона..."
-              className="w-full bg-[#1a1a1a] border border-[#222] rounded-lg px-3 py-2 text-sm focus:outline-none pr-10"
-              value={regionSearch}
-              onChange={(e) => setRegionSearch(e.target.value)}
-            />
-            {regionSearch && (
-              <button onClick={() => setRegionSearch('')} className="absolute right-3 top-2.5 text-gray-500">
-                <X size={14} />
-              </button>
-            )}
-            {!regionSearch && <Search className="absolute right-3 top-2.5 text-gray-600" size={14} />}
-          </div>
-
-          <button onClick={() => onSetDimMap(!dimMap)} className={`w-full flex items-center justify-between p-2 mb-3 bg-[#1a1a1a] rounded-lg border transition-all ${dimMap ? 'border-blue-500/50 bg-blue-500/5' : 'border-[#222]'}`}>
-            <div className="flex items-center gap-2">
-              <Moon size={14} className={dimMap ? 'text-blue-400' : 'text-gray-500'} />
-              <span className="text-[11px] font-medium text-gray-400">Затемнить фон</span>
+          {!isCollapsed ? (
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                <Layers size={12} /> ВЫБОР ОБЛАСТИ
+              </h2>
+              {selectedRegions.length > 0 && (
+                <button onClick={() => selectedRegions.forEach(r => onRemoveRegion(r.properties.id || r.properties.name))} className="text-[9px] text-red-500/60 hover:text-red-500 font-bold uppercase transition-colors flex items-center gap-1">
+                  <RotateCcw size={10} /> Сброс
+                </button>
+              )}
             </div>
-            <div className={`w-8 h-4 rounded-full relative transition-colors ${dimMap ? 'bg-blue-500' : 'bg-[#333]'}`}>
-              <div className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200" style={{ transform: `translateX(${dimMap ? '18px' : '2px'})` }} />
+          ) : (
+            <div 
+              onClick={() => expandAndFocus('region')}
+              className="flex justify-center text-gray-600 mb-2 cursor-pointer hover:text-blue-400 transition-colors" 
+              title="Поиск региона"
+            >
+              <Layers size={20} />
             </div>
-          </button>
+          )}
+          
+          {!isCollapsed && (
+            <div className="relative mb-2">
+              <input 
+                ref={regionInputRef}
+                type="text" 
+                placeholder="Поиск региона..."
+                className="w-full bg-[#1a1a1a] border border-[#222] rounded-lg px-3 py-2 text-sm focus:outline-none pr-10"
+                value={regionSearch}
+                onChange={(e) => setRegionSearch(e.target.value)}
+              />
+              {regionSearch && (
+                <button onClick={() => setRegionSearch('')} className="absolute right-3 top-2.5 text-gray-500">
+                  <X size={14} />
+                </button>
+              )}
+              {!regionSearch && <Search className="absolute right-3 top-2.5 text-gray-600" size={14} />}
+            </div>
+          )}
 
-          {regionSearch.length > 0 && (
+          {!isCollapsed ? (
+            <button onClick={() => onSetDimMap(!dimMap)} className={`w-full flex items-center justify-between p-2 mb-3 bg-[#1a1a1a] rounded-lg border transition-all ${dimMap ? 'border-blue-500/50 bg-blue-500/5' : 'border-[#222]'}`}>
+              <div className="flex items-center gap-2">
+                <Moon size={14} className={dimMap ? 'text-blue-400' : 'text-gray-500'} />
+                <span className="text-[11px] font-medium text-gray-400">Затемнить фон</span>
+              </div>
+              <div className={`w-8 h-4 rounded-full relative transition-colors ${dimMap ? 'bg-blue-500' : 'bg-[#333]'}`}>
+                <div className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200" style={{ transform: `translateX(${dimMap ? '18px' : '2px'})` }} />
+              </div>
+            </button>
+          ) : (
+             <div className="flex flex-col gap-2 items-center mb-3">
+                <button 
+                  onClick={() => onSetDimMap(!dimMap)} 
+                  className={`p-2 rounded-lg border transition-all ${dimMap ? 'border-blue-500/50 bg-blue-500/5 text-blue-400' : 'border-[#222] text-gray-500'}`} 
+                  title="Затемнить фон"
+                >
+                   <Moon size={18} />
+                </button>
+                {selectedRegions.length > 0 && (
+                   <div className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                      {selectedRegions.length}
+                   </div>
+                )}
+             </div>
+          )}
+
+          {regionSearch.length > 0 && !isCollapsed && (
             <div className="max-h-48 overflow-y-auto bg-[#161616] border border-[#222] rounded-lg mb-3 shadow-xl custom-scrollbar">
               {filteredRegions.map((region, i) => (
                 <button 
@@ -310,96 +399,126 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          <div className="space-y-1">
-            {selectedRegions.map(region => (
-              <div key={region.properties.id || region.properties.name} className="flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg group">
-                <span className="text-[11px] text-blue-400 font-bold truncate pr-2">{region.properties.name}</span>
-                <button onClick={() => onRemoveRegion(region.properties.id || region.properties.name)} className="text-blue-400/50 hover:text-red-400 transition-colors">
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="relative">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-              <MapPin size={12} /> ПОИСК ГОРОДА
-            </h2>
-            {selectedCities.length > 0 && (
-              <button onClick={() => selectedCities.forEach(c => onRemoveCity(c.properties.id || c.properties.name))} className="text-[9px] text-red-500/60 hover:text-red-500 font-bold uppercase transition-colors flex items-center gap-1">
-                <RotateCcw size={10} /> Сброс
-              </button>
-            )}
-          </div>
-          <div className="relative">
-            <input 
-              type="text" 
-              placeholder="Введите название города..."
-              className="w-full bg-[#1a1a1a] border border-[#222] rounded-lg px-3 py-2 text-sm focus:outline-none pr-10"
-              value={citySearch}
-              onChange={(e) => handleCitySearch(e.target.value)}
-              onKeyDown={handleCityKeyDown}
-            />
-            {citySearch && (
-              <button onClick={() => { setCitySearch(''); setCityResults([]); setSearchError(null); }} className="absolute right-3 top-2.5 text-gray-600 hover:text-white"><X size={14} /></button>
-            )}
-            
-            {(isCitySearching || cityResults.length > 0 || searchError) && (
-              <div className="absolute top-full left-0 w-full mt-1 bg-[#1a1a1a] border border-[#222] rounded-lg overflow-hidden shadow-2xl z-[5000] max-h-64 overflow-y-auto custom-scrollbar">
-                {isCitySearching && (
-                  <div className="px-3 py-4 text-center">
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <span className="text-[10px] text-gray-500">Поиск...</span>
-                  </div>
-                )}
-                {searchError && !isCitySearching && (
-                   <div className="px-3 py-4 text-center text-red-400 text-[11px] leading-relaxed">
-                     {searchError}
-                   </div>
-                )}
-                {!isCitySearching && cityResults.map((city, i) => (
-                  <button 
-                    key={i} 
-                    className="w-full text-left px-3 py-3 text-[11px] hover:bg-blue-600 hover:text-white border-b border-[#222] last:border-0 flex items-start gap-3 transition-colors group" 
-                    onClick={() => selectCity(city)}
-                  >
-                    <Navigation size={14} className="mt-0.5 text-gray-600 group-hover:text-blue-200" /> 
-                    <div className="flex flex-col min-w-0">
-                      <span className="truncate leading-tight text-gray-300 group-hover:text-white font-bold">{city.name}</span>
-                      <span className="truncate leading-tight text-[9px] text-gray-500 group-hover:text-blue-200 mt-0.5">{city.display_name.split(',').slice(1).join(',')}</span>
-                    </div>
+          {!isCollapsed && (
+            <div className="space-y-1">
+              {selectedRegions.map(region => (
+                <div key={region.properties.id || region.properties.name} className="flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg group">
+                  <span className="text-[11px] text-blue-400 font-bold truncate pr-2">{region.properties.name}</span>
+                  <button onClick={() => onRemoveRegion(region.properties.id || region.properties.name)} className="text-blue-400/50 hover:text-red-400 transition-colors">
+                    <X size={12} />
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-2 space-y-1">
-            {selectedCities.map(city => (
-              <div key={city.properties.id || city.properties.name} className="flex items-center justify-between p-2 bg-orange-500/10 border border-orange-500/30 rounded-lg group">
-                <span className="text-[11px] text-orange-400 font-bold truncate pr-2">{city.properties.name}</span>
-                <button onClick={() => onRemoveCity(city.properties.id || city.properties.name)} className="text-orange-400/50 hover:text-red-400 transition-colors">
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
-        <section className="space-y-4">
-          <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-            <Settings size={12} /> СЛОИ И ВИД
-          </h2>
+        {/* ПОИСК ГОРОДА */}
+        <section className="relative">
+          {!isCollapsed ? (
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                <MapPin size={12} /> ПОИСК ГОРОДА
+              </h2>
+              {selectedCities.length > 0 && (
+                <button onClick={() => selectedCities.forEach(c => onRemoveCity(c.properties.id || c.properties.name))} className="text-[9px] text-red-500/60 hover:text-red-500 font-bold uppercase transition-colors flex items-center gap-1">
+                  <RotateCcw size={10} /> Сброс
+                </button>
+              )}
+            </div>
+          ) : (
+            <div 
+              onClick={() => expandAndFocus('city')}
+              className="flex justify-center text-gray-600 mb-2 cursor-pointer hover:text-blue-400 transition-colors" 
+              title="Поиск города"
+            >
+              <MapPin size={20} />
+            </div>
+          )}
           
-          <div className="flex items-center justify-between p-2 bg-[#1a1a1a] rounded-lg border border-[#222]">
-            <span className="text-[11px] font-medium text-gray-400">Тип карты</span>
-            <div className="flex gap-1">
+          {!isCollapsed && (
+            <div className="relative">
+              <input 
+                ref={cityInputRef}
+                type="text" 
+                placeholder="Введите название..."
+                className="w-full bg-[#1a1a1a] border border-[#222] rounded-lg px-3 py-2 text-sm focus:outline-none pr-10"
+                value={citySearch}
+                onChange={(e) => handleCitySearch(e.target.value)}
+                onKeyDown={handleCityKeyDown}
+              />
+              {citySearch && (
+                <button onClick={() => { setCitySearch(''); setCityResults([]); setSearchError(null); }} className="absolute right-3 top-2.5 text-gray-600 hover:text-white"><X size={14} /></button>
+              )}
+              
+              {(isCitySearching || cityResults.length > 0 || searchError) && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-[#1a1a1a] border border-[#222] rounded-lg overflow-hidden shadow-2xl z-[5000] max-h-64 overflow-y-auto custom-scrollbar">
+                  {isCitySearching && (
+                    <div className="px-3 py-4 text-center">
+                      <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                      <span className="text-[10px] text-gray-500">Поиск...</span>
+                    </div>
+                  )}
+                  {searchError && !isCitySearching && (
+                    <div className="px-3 py-4 text-center text-red-400 text-[11px] leading-relaxed">
+                      {searchError}
+                    </div>
+                  )}
+                  {!isCitySearching && cityResults.map((city, i) => (
+                    <button 
+                      key={i} 
+                      className="w-full text-left px-3 py-3 text-[11px] hover:bg-blue-600 hover:text-white border-b border-[#222] last:border-0 flex items-start gap-3 transition-colors group" 
+                      onClick={() => selectCity(city)}
+                    >
+                      <Navigation size={14} className="mt-0.5 text-gray-600 group-hover:text-blue-200" /> 
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate leading-tight text-gray-300 group-hover:text-white font-bold">{city.name}</span>
+                        <span className="truncate leading-tight text-[9px] text-gray-500 group-hover:text-blue-200 mt-0.5">{city.display_name.split(',').slice(1).join(',')}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isCollapsed ? (
+            <div className="mt-2 space-y-1">
+              {selectedCities.map(city => (
+                <div key={city.properties.id || city.properties.name} className="flex items-center justify-between p-2 bg-orange-500/10 border border-orange-500/30 rounded-lg group">
+                  <span className="text-[11px] text-orange-400 font-bold truncate pr-2">{city.properties.name}</span>
+                  <button onClick={() => onRemoveCity(city.properties.id || city.properties.name)} className="text-orange-400/50 hover:text-red-400 transition-colors">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 items-center">
+               {selectedCities.length > 0 && (
+                  <div className="w-5 h-5 bg-orange-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                     {selectedCities.length}
+                  </div>
+               )}
+            </div>
+          )}
+        </section>
+
+        {/* СЛОИ И ВИД */}
+        <section className="space-y-4">
+          {!isCollapsed && (
+            <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+              <Settings size={12} /> СЛОИ И ВИД
+            </h2>
+          )}
+          
+          <div className={`flex ${isCollapsed ? 'flex-col items-center' : 'items-center justify-between'} p-2 bg-[#1a1a1a] rounded-lg border border-[#222]`}>
+            {!isCollapsed && <span className="text-[11px] font-medium text-gray-400">Вид</span>}
+            <div className={`flex ${isCollapsed ? 'flex-col gap-2' : 'gap-1'}`}>
               {[
                 { mode: MapMode.STREETS, icon: <MapIcon size={12} />, title: 'Яндекс' },
-                { mode: MapMode.BRIGHT_V2, icon: <Sun size={12} />, title: 'Bright V2' },
-                { mode: MapMode.DARK, icon: <Moon size={12} />, title: 'Dark No Labels' },
+                { mode: MapMode.BRIGHT_V2, icon: <Sun size={12} />, title: 'Bright' },
+                { mode: MapMode.DARK, icon: <Moon size={12} />, title: 'Dark' },
                 { mode: MapMode.NONE, icon: <EyeOff size={12} />, title: 'Пусто' }
               ].map(opt => (
                 <button key={opt.mode} title={opt.title} onClick={() => onSetMapMode(opt.mode)} className={`p-1.5 rounded-md transition-all ${mapMode === opt.mode ? 'bg-blue-500 text-white shadow-md' : 'text-gray-500 hover:bg-[#222]'}`}>{opt.icon}</button>
@@ -407,43 +526,62 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <button onClick={() => onSetShowRoads(!showRoads)} className={`w-full flex items-center justify-between p-2 bg-[#1a1a1a] rounded-lg border transition-all ${showRoads ? 'border-indigo-500/50 bg-indigo-500/5' : 'border-[#222]'}`}>
-              <div className="flex items-center gap-2"><Route size={14} className={showRoads ? 'text-indigo-400' : 'text-gray-500'} /><span className="text-[11px] font-medium text-gray-400">Фед. трассы</span></div>
-              <div className={`w-8 h-4 rounded-full relative transition-colors ${showRoads ? 'bg-indigo-500' : 'bg-[#333]'}`}><div className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200" style={{ transform: `translateX(${showRoads ? '18px' : '2px'})` }} /></div>
-            </button>
-            <button onClick={() => onSetShowRegionalRoads(!showRegionalRoads)} className={`w-full flex items-center justify-between p-2 bg-[#1a1a1a] rounded-lg border transition-all ${showRegionalRoads ? 'border-blue-500/50 bg-blue-500/5' : 'border-[#222]'}`}>
-              <div className="flex items-center gap-2"><Route size={14} className={showRegionalRoads ? 'text-blue-400' : 'text-gray-500'} /><span className="text-[11px] font-medium text-gray-400">Регион. трассы</span></div>
-              <div className={`w-8 h-4 rounded-full relative transition-colors ${showRegionalRoads ? 'bg-blue-500' : 'bg-[#333]'}`}><div className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200" style={{ transform: `translateX(${showRegionalRoads ? '18px' : '2px'})` }} /></div>
-            </button>
-          </div>
+          {!isCollapsed ? (
+            <div className="space-y-2">
+              <button onClick={() => onSetShowRoads(!showRoads)} className={`w-full flex items-center justify-between p-2 bg-[#1a1a1a] rounded-lg border transition-all ${showRoads ? 'border-indigo-500/50 bg-indigo-500/5' : 'border-[#222]'}`}>
+                <div className="flex items-center gap-2"><Route size={14} className={showRoads ? 'text-indigo-400' : 'text-gray-500'} /><span className="text-[11px] font-medium text-gray-400">Фед. трассы</span></div>
+                <div className={`w-8 h-4 rounded-full relative transition-colors ${showRoads ? 'bg-indigo-500' : 'bg-[#333]'}`}><div className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200" style={{ transform: `translateX(${showRoads ? '18px' : '2px'})` }} /></div>
+              </button>
+              <button onClick={() => onSetShowRegionalRoads(!showRegionalRoads)} className={`w-full flex items-center justify-between p-2 bg-[#1a1a1a] rounded-lg border transition-all ${showRegionalRoads ? 'border-blue-500/50 bg-blue-500/5' : 'border-[#222]'}`}>
+                <div className="flex items-center gap-2"><Route size={14} className={showRegionalRoads ? 'text-blue-400' : 'text-gray-500'} /><span className="text-[11px] font-medium text-gray-400">Регион. трассы</span></div>
+                <div className={`w-8 h-4 rounded-full relative transition-colors ${showRegionalRoads ? 'bg-blue-500' : 'bg-[#333]'}`}><div className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200" style={{ transform: `translateX(${showRegionalRoads ? '18px' : '2px'})` }} /></div>
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 items-center">
+               <button onClick={() => onSetShowRoads(!showRoads)} className={`p-2 rounded-lg border transition-all ${showRoads ? 'border-indigo-500/50 bg-indigo-500/5 text-indigo-400' : 'border-[#222] text-gray-500'}`} title="Федеральные трассы">
+                  <Route size={18} />
+               </button>
+               <button onClick={() => onSetShowRegionalRoads(!showRegionalRoads)} className={`p-2 rounded-lg border transition-all ${showRegionalRoads ? 'border-blue-500/50 bg-blue-500/5 text-blue-400' : 'border-[#222] text-gray-500'}`} title="Региональные трассы">
+                  <Route size={18} />
+               </button>
+            </div>
+          )}
         </section>
 
-        <section>
-          <h2 className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest flex items-center gap-2">
-            <Layers size={12} /> СПИСОК KML ({kmlLayers.length})
-          </h2>
-          <div className="space-y-1">
-            {[...kmlLayers].reverse().map(layer => (
-              <div key={layer.id} className="flex items-center justify-between p-2 hover:bg-[#1a1a1a] rounded-lg group transition-colors">
-                <div className="flex items-center gap-3 overflow-hidden">
-                   <input type="color" title="Цвет слоя" value={layer.color} onChange={(e) => onUpdateKmlColor(layer.id, e.target.value)} className="w-5 h-5 rounded-md border border-[#333] bg-transparent cursor-pointer overflow-hidden" />
-                   <span className="text-[11px] text-gray-400 truncate max-w-[140px] font-medium">{layer.name}</span>
+        {/* СПИСОК KML */}
+        {!isCollapsed && (
+          <section>
+            <h2 className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest flex items-center gap-2">
+              <Layers size={12} /> СПИСОК KML ({kmlLayers.length})
+            </h2>
+            <div className="space-y-1">
+              {[...kmlLayers].reverse().map(layer => (
+                <div key={layer.id} className="flex items-center justify-between p-2 hover:bg-[#1a1a1a] rounded-lg group transition-colors">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <input type="color" title="Цвет слоя" value={layer.color} onChange={(e) => onUpdateKmlColor(layer.id, e.target.value)} className="w-5 h-5 rounded-md border border-[#333] bg-transparent cursor-pointer overflow-hidden" />
+                    <span className="text-[11px] text-gray-400 truncate max-w-[140px] font-medium">{layer.name}</span>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => onToggleKml(layer.id)} className="p-1.5 text-gray-600 hover:text-blue-400" title={layer.visible ? 'Скрыть' : 'Показать'}>{layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}</button>
+                    <button onClick={() => onRemoveKml(layer.id)} className="p-1.5 text-gray-600 hover:text-red-500" title="Удалить"><Trash2 size={12} /></button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => onToggleKml(layer.id)} className="p-1.5 text-gray-600 hover:text-blue-400" title={layer.visible ? 'Скрыть' : 'Показать'}>{layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}</button>
-                  <button onClick={() => onRemoveKml(layer.id)} className="p-1.5 text-gray-600 hover:text-red-500" title="Удалить"><Trash2 size={12} /></button>
-                </div>
-              </div>
-            ))}
-            {kmlLayers.length === 0 && <p className="text-[10px] text-gray-600 italic text-center py-4">Нет загруженных файлов</p>}
-          </div>
-        </section>
+              ))}
+              {kmlLayers.length === 0 && <p className="text-[10px] text-gray-600 italic text-center py-4">Нет файлов</p>}
+            </div>
+          </section>
+        )}
       </div>
 
-      <div className="p-4 bg-[#0a0a0a] border-t border-[#222]">
-        <button onClick={triggerExport} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95 text-xs uppercase tracking-tighter group">
-          <Download size={16} className="group-hover:translate-y-0.5 transition-transform" /> СКАЧАТЬ SVG (AI READY)
+      <div className={`p-4 bg-[#0a0a0a] border-t border-[#222] transition-all ${isCollapsed ? 'px-2' : ''}`}>
+        <button 
+          onClick={triggerExport} 
+          className={`w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl flex items-center justify-center transition-all shadow-xl active:scale-95 text-xs uppercase tracking-tighter group ${isCollapsed ? 'h-10' : 'py-3 gap-2'}`}
+          title="СКАЧАТЬ SVG (AI READY)"
+        >
+          <Download size={16} className={`${!isCollapsed && 'group-hover:translate-y-0.5'} transition-transform`} /> 
+          {!isCollapsed && <span>СКАЧАТЬ SVG</span>}
         </button>
       </div>
     </div>
