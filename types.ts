@@ -19,6 +19,7 @@ export interface KmlLayerData {
 
 export enum MapMode {
   STREETS = 'streets',
-  GRAY_VECTOR = 'gray_vector',
+  BRIGHT_V2 = 'bright_v2',
+  DARK = 'dark',
   NONE = 'none'
 }

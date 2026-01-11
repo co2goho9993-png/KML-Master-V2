@@ -18,7 +18,9 @@ import {
   MapPin,
   Plus,
   RotateCcw,
-  Moon
+  Moon,
+  Globe,
+  Sun
 } from 'lucide-react';
 import { KmlLayerData, MapMode } from '../types';
 import { parseKml } from '../utils/geoUtils';
@@ -283,7 +285,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             {!regionSearch && <Search className="absolute right-3 top-2.5 text-gray-600" size={14} />}
           </div>
 
-          {/* ПЕРЕКЛЮЧАТЕЛЬ ЗАТЕМНЕНИЯ */}
           <button onClick={() => onSetDimMap(!dimMap)} className={`w-full flex items-center justify-between p-2 mb-3 bg-[#1a1a1a] rounded-lg border transition-all ${dimMap ? 'border-blue-500/50 bg-blue-500/5' : 'border-[#222]'}`}>
             <div className="flex items-center gap-2">
               <Moon size={14} className={dimMap ? 'text-blue-400' : 'text-gray-500'} />
@@ -321,7 +322,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </section>
 
-        {/* ПОИСК ГОРОДА */}
         <section className="relative">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -388,7 +388,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </section>
 
-        {/* СЛОИ И ВИД */}
         <section className="space-y-4">
           <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
             <Settings size={12} /> СЛОИ И ВИД
@@ -399,7 +398,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex gap-1">
               {[
                 { mode: MapMode.STREETS, icon: <MapIcon size={12} />, title: 'Яндекс' },
-                { mode: MapMode.GRAY_VECTOR, icon: <Grid size={12} />, title: 'Серый' },
+                { mode: MapMode.BRIGHT_V2, icon: <Sun size={12} />, title: 'Bright V2' },
+                { mode: MapMode.DARK, icon: <Moon size={12} />, title: 'Dark No Labels' },
                 { mode: MapMode.NONE, icon: <EyeOff size={12} />, title: 'Пусто' }
               ].map(opt => (
                 <button key={opt.mode} title={opt.title} onClick={() => onSetMapMode(opt.mode)} className={`p-1.5 rounded-md transition-all ${mapMode === opt.mode ? 'bg-blue-500 text-white shadow-md' : 'text-gray-500 hover:bg-[#222]'}`}>{opt.icon}</button>
@@ -419,7 +419,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </section>
 
-        {/* СПИСОК KML */}
         <section>
           <h2 className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest flex items-center gap-2">
             <Layers size={12} /> СПИСОК KML ({kmlLayers.length})

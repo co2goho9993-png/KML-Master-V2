@@ -189,7 +189,6 @@ const MapController: React.FC<{
   const roadAbortRef = useRef<AbortController | null>(null);
   const prevKmlCountRef = useRef(kmlLayers.length);
 
-  // Применяем flyTo только если mapTarget изменился
   useEffect(() => {
     if (mapTarget && mapTarget !== processedState.target) {
       map.flyTo([mapTarget.lat, mapTarget.lon], 13, { duration: 1.5 });
@@ -197,7 +196,6 @@ const MapController: React.FC<{
     }
   }, [mapTarget, map, processedState.target, updateProcessedState]);
 
-  // Применяем fitBounds для регионов (максимальный зум)
   useEffect(() => {
     if (selectedRegions.length > processedState.regions) {
       const latest = selectedRegions[selectedRegions.length - 1];
@@ -211,7 +209,6 @@ const MapController: React.FC<{
     }
   }, [selectedRegions, map, processedState.regions, updateProcessedState]);
 
-  // Применяем fitBounds для городов (максимальный зум)
   useEffect(() => {
     if (selectedCities.length > processedState.cities) {
       const latest = selectedCities[selectedCities.length - 1];
@@ -243,7 +240,6 @@ const MapController: React.FC<{
     prevKmlCountRef.current = kmlLayers.length;
   }, [kmlLayers, map]);
 
-  // Загрузка дорог при смене региона/города или переключателей
   useEffect(() => {
     const target = selectedCities.length > 0 
       ? selectedCities[selectedCities.length - 1] 
@@ -319,7 +315,9 @@ const MapView: React.FC<MapViewProps> = ({
   }, []);
 
   const YANDEX_MAP = "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&lang=ru_RU";
-  const NO_LABELS_MAP = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
+  // Использование CartoDB Voyager No Labels: голубая вода, зеленые леса, без подписей
+  const CARTODB_VOYAGER = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png";
+  const CARTODB_DARK = "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png";
 
   useEffect(() => {
     const handleExport = () => {
@@ -384,10 +382,17 @@ const MapView: React.FC<MapViewProps> = ({
             keepBuffer={8}
           />
         )}
-        {mapMode === MapMode.GRAY_VECTOR && (
+        {mapMode === MapMode.BRIGHT_V2 && (
           <TileLayer 
-            url={NO_LABELS_MAP} 
-            className="grayscale-vector-map" 
+            url={CARTODB_VOYAGER} 
+            tileSize={256} 
+            keepBuffer={8} 
+            attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
+          />
+        )}
+        {mapMode === MapMode.DARK && (
+          <TileLayer 
+            url={CARTODB_DARK} 
             tileSize={256} 
             keepBuffer={8} 
             attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
