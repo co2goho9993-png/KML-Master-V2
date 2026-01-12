@@ -23,3 +23,18 @@ export enum MapMode {
   DARK = 'dark',
   NONE = 'none'
 }
+
+export interface ProjectData {
+  version: string;
+  timestamp: number;
+  kmlLayers: KmlLayerData[];
+  selectedRegions: any[];
+  selectedCities: any[];
+  settings: {
+    mapMode: MapMode;
+    useMultiColor: boolean;
+    showRoads: boolean;
+    showRegionalRoads: boolean;
+    dimMap: boolean;
+  };
+}

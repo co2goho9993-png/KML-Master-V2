@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import MapView from './components/MapView';
 import Sidebar from './components/Sidebar';
-import { KmlLayerData, MapMode } from './types';
+import { KmlLayerData, MapMode, ProjectData } from './types';
 import { fetchBoundaryByOsmId } from './utils/overpassService';
 
 const App: React.FC = () => {
@@ -92,6 +92,21 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleLoadProject = useCallback((project: ProjectData) => {
+    setKmlLayers(project.kmlLayers || []);
+    setSelectedRegions(project.selectedRegions || []);
+    setSelectedCities(project.selectedCities || []);
+    if (project.settings) {
+      setMapMode(project.settings.mapMode);
+      setUseMultiColor(project.settings.useMultiColor);
+      setShowRoads(project.settings.showRoads);
+      setShowRegionalRoads(project.settings.showRegionalRoads);
+      setDimMap(project.settings.dimMap);
+    }
+    // Сброс цели карты, чтобы не было конфликтов
+    setMapTarget(null);
+  }, []);
+
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden">
       <Sidebar 
@@ -119,6 +134,7 @@ const App: React.FC = () => {
         onSetDimMap={setDimMap}
         isLoading={isLoading}
         onCitySelect={handleCitySelect}
+        onLoadProject={handleLoadProject}
       />
       
       <main className="flex-1 relative overflow-hidden">
