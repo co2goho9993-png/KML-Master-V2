@@ -173,28 +173,32 @@ export async function fetchBoundaryByOsmId(osmId: number | number[], osmType: st
 }
 
 /**
- * Получение дорог СТРОГО внутри границ региона.
- * Оптимизировано: загружаются только дороги с ref (маркировкой), что отсекает улицы.
- * Добавлен модификатор 'qt' для ускорения обработки на сервере Overpass.
+ * Получение дорог внутри границ одного или нескольких регионов/городов.
  */
-export async function fetchRoadsForRegion(regionFeature: any, options: RoadFetchOptions): Promise<any> {
+export async function fetchRoadsForRegion(regionFeature: any | any[], options: RoadFetchOptions): Promise<any> {
   if (!options.includeFederal && !options.includeRegional) return { type: "FeatureCollection", features: [] };
   if (options.signal?.aborted) return { type: "FeatureCollection", features: [] };
   
-  const osmId = regionFeature.properties.osmId;
-  const osmType = regionFeature.properties.osmType || 'relation';
-  const name = regionFeature.properties.name;
+  const features = Array.isArray(regionFeature) ? regionFeature : [regionFeature];
   
-  let areaSearch = '';
-  if (osmId) {
-    const baseId = Array.isArray(osmId) ? osmId[0] : osmId;
-    const areaId = (osmType === 'way' ? 2400000000 : 3600000000) + baseId;
-    areaSearch = `area(${areaId})`;
-  } else if (name) {
-    areaSearch = `area["name"~"${name}"]["admin_level"~"^[45]$"]`;
-  }
+  let areaQueries = features.map(f => {
+    const osmId = f.properties.osmId;
+    const osmType = f.properties.osmType || 'relation';
+    const name = f.properties.name;
+    
+    if (osmId) {
+      const baseId = Array.isArray(osmId) ? osmId[0] : osmId;
+      const areaId = (osmType === 'way' ? 2400000000 : 3600000000) + baseId;
+      return `area(${areaId})`;
+    } else if (name) {
+      return `area["name"~"${name}"]["admin_level"~"^[45]$"]`;
+    }
+    return null;
+  }).filter(Boolean);
 
-  if (!areaSearch) return { type: "FeatureCollection", features: [] };
+  if (areaQueries.length === 0) return { type: "FeatureCollection", features: [] };
+
+  const areaUnion = `(${areaQueries.join('; ')};)`;
 
   // Фильтры:
   // motorway/trunk - федеральные
@@ -219,7 +223,7 @@ export async function fetchRoadsForRegion(regionFeature: any, options: RoadFetch
 
   const query = `
     [out:json][timeout:120];
-    (${areaSearch};)->.searchArea;
+    ${areaUnion}->.searchArea;
     (
       ${roadFilter}
     );

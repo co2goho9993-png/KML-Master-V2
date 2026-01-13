@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mapTarget, setMapTarget] = useState<{lat: number, lon: number, bounds?: any, osmId?: number, osmType?: string} | null>(null);
+  const [projectLoadTime, setProjectLoadTime] = useState<number>(0);
 
   const handleAddKml = useCallback((name: string, geoJson: any) => {
     const newLayer: KmlLayerData = {
@@ -103,8 +104,8 @@ const App: React.FC = () => {
       setShowRegionalRoads(project.settings.showRegionalRoads);
       setDimMap(project.settings.dimMap);
     }
-    // Сброс цели карты, чтобы не было конфликтов
     setMapTarget(null);
+    setProjectLoadTime(Date.now());
   }, []);
 
   return (
@@ -150,6 +151,7 @@ const App: React.FC = () => {
           onLoadingChange={setIsLoading}
           mapTarget={mapTarget}
           dimMap={dimMap}
+          projectLoadTime={projectLoadTime}
         />
         
         {isLoading && (
