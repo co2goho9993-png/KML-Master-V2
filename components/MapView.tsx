@@ -27,7 +27,6 @@ interface MapViewProps {
   onLoadingChange: (loading: boolean) => void;
   mapTarget: {lat: number, lon: number, bounds?: any} | null;
   dimMap: boolean;
-  projectLoadTime: number;
 }
 
 const MapResizeHandler: React.FC = () => {
@@ -43,7 +42,7 @@ const MapResizeHandler: React.FC = () => {
   return null;
 };
 
-const MapAssets: React.FC<{ selectedRegions: any[], selectedCities: any[], dimMap: boolean }> = ({ selectedRegions, selectedCities, dimMap }) => {
+const MapAssets: React.FC<{ selectedRegions: any[], dimMap: boolean }> = ({ selectedRegions, dimMap }) => {
   const map = useMap();
   const [clipPathId] = useState(`map-clip-${Math.random().toString(36).substr(2, 9)}`);
   const [dimMaskId] = useState(`dim-mask-${Math.random().toString(36).substr(2, 9)}`);
@@ -112,7 +111,7 @@ const MapAssets: React.FC<{ selectedRegions: any[], selectedCities: any[], dimMa
         dimRect.setAttribute('y', '-50000');
         dimRect.setAttribute('width', '100000');
         dimRect.setAttribute('height', '100000');
-        dimRect.setAttribute('opacity', dimMap && (selectedRegions.length > 0 || selectedCities.length > 0) ? '1' : '0');
+        dimRect.setAttribute('opacity', dimMap && selectedRegions.length > 0 ? '1' : '0');
 
         const maskBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         maskBg.setAttribute('x', '-50000');
@@ -122,10 +121,8 @@ const MapAssets: React.FC<{ selectedRegions: any[], selectedCities: any[], dimMa
         maskBg.setAttribute('fill', 'white');
         dimMask.appendChild(maskBg);
         
-        const allMaskItems = [...selectedRegions, ...selectedCities];
-        
-        allMaskItems.forEach(item => {
-          const features = item.features || (item.type === "Feature" ? [item] : []);
+        selectedRegions.forEach(region => {
+          const features = region.features || (region.type === "Feature" ? [region] : []);
           features.forEach((f: any) => {
             const createPathNodes = (coords: any[]) => {
               const points = coords.map((c: any) => map.latLngToLayerPoint([c[1], c[0]]));
@@ -170,7 +167,7 @@ const MapAssets: React.FC<{ selectedRegions: any[], selectedCities: any[], dimMa
       const roadsPane = map.getPane('roads-pane');
       if (roadsPane) roadsPane.style.clipPath = '';
     };
-  }, [map, selectedRegions, selectedCities, clipPathId, dimMaskId, dimRectId, dimMap]);
+  }, [map, selectedRegions, clipPathId, dimMaskId, dimRectId, dimMap]);
 
   return null;
 };
@@ -198,56 +195,12 @@ const MapController: React.FC<{
   mapTarget: {lat: number, lon: number, bounds?: any} | null;
   onRoadsFetched: (roads: any) => void;
   onLoadingChange: (loading: boolean) => void;
-  processedState: { regions: number, cities: number, target: any, lastProjectLoad: number };
+  processedState: { regions: number, cities: number, target: any };
   updateProcessedState: (key: string, value: any) => void;
-  projectLoadTime: number;
-}> = ({ selectedRegions, selectedCities, kmlLayers, showRoads, showRegionalRoads, mapTarget, onRoadsFetched, onLoadingChange, processedState, updateProcessedState, projectLoadTime }) => {
+}> = ({ selectedRegions, selectedCities, kmlLayers, showRoads, showRegionalRoads, mapTarget, onRoadsFetched, onLoadingChange, processedState, updateProcessedState }) => {
   const map = useMap();
   const roadAbortRef = useRef<AbortController | null>(null);
   const prevKmlCountRef = useRef(kmlLayers.length);
-
-  // Логика автоматического Zoom to Extent при загрузке проекта
-  useEffect(() => {
-    if (projectLoadTime > processedState.lastProjectLoad) {
-      const bounds = L.latLngBounds([]);
-      let hasData = false;
-
-      selectedRegions.forEach(r => {
-        const layer = L.geoJSON(r);
-        const b = layer.getBounds();
-        if (b.isValid()) {
-          bounds.extend(b);
-          hasData = true;
-        }
-      });
-
-      selectedCities.forEach(c => {
-        const layer = L.geoJSON(c);
-        const b = layer.getBounds();
-        if (b.isValid()) {
-          bounds.extend(b);
-          hasData = true;
-        }
-      });
-
-      kmlLayers.filter(l => l.visible).forEach(l => {
-        const layer = L.geoJSON(l.geoJson);
-        const b = layer.getBounds();
-        if (b.isValid()) {
-          bounds.extend(b);
-          hasData = true;
-        }
-      });
-
-      if (hasData && bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [40, 40], animate: true });
-      }
-      
-      updateProcessedState('lastProjectLoad', projectLoadTime);
-      updateProcessedState('regions', selectedRegions.length);
-      updateProcessedState('cities', selectedCities.length);
-    }
-  }, [projectLoadTime, selectedRegions, selectedCities, kmlLayers, map, processedState.lastProjectLoad, updateProcessedState]);
 
   useEffect(() => {
     if (mapTarget && mapTarget !== processedState.target) {
@@ -257,7 +210,7 @@ const MapController: React.FC<{
   }, [mapTarget, map, processedState.target, updateProcessedState]);
 
   useEffect(() => {
-    if (projectLoadTime === processedState.lastProjectLoad && selectedRegions.length > processedState.regions) {
+    if (selectedRegions.length > processedState.regions) {
       const latest = selectedRegions[selectedRegions.length - 1];
       if (latest && latest.geometry) {
         const bounds = L.geoJSON(latest).getBounds();
@@ -267,10 +220,10 @@ const MapController: React.FC<{
       }
       updateProcessedState('regions', selectedRegions.length);
     }
-  }, [selectedRegions, map, processedState.regions, projectLoadTime, processedState.lastProjectLoad, updateProcessedState]);
+  }, [selectedRegions, map, processedState.regions, updateProcessedState]);
 
   useEffect(() => {
-    if (projectLoadTime === processedState.lastProjectLoad && selectedCities.length > processedState.cities) {
+    if (selectedCities.length > processedState.cities) {
       const latest = selectedCities[selectedCities.length - 1];
       if (latest && latest.geometry) {
         const bounds = L.geoJSON(latest).getBounds();
@@ -280,7 +233,7 @@ const MapController: React.FC<{
       }
       updateProcessedState('cities', selectedCities.length);
     }
-  }, [selectedCities, map, processedState.cities, projectLoadTime, processedState.lastProjectLoad, updateProcessedState]);
+  }, [selectedCities, map, processedState.cities, updateProcessedState]);
 
   useEffect(() => {
     if (kmlLayers.length > prevKmlCountRef.current) {
@@ -301,14 +254,16 @@ const MapController: React.FC<{
   }, [kmlLayers, map]);
 
   useEffect(() => {
-    const allTargets = [...selectedRegions, ...selectedCities];
+    const target = selectedCities.length > 0 
+      ? selectedCities[selectedCities.length - 1] 
+      : (selectedRegions.length > 0 ? selectedRegions[selectedRegions.length - 1] : null);
     
-    if ((showRoads || showRegionalRoads) && allTargets.length > 0) {
+    if ((showRoads || showRegionalRoads) && target) {
       onLoadingChange(true);
       if (roadAbortRef.current) roadAbortRef.current.abort();
       roadAbortRef.current = new AbortController();
 
-      fetchRoadsForRegion(allTargets, { 
+      fetchRoadsForRegion(target, { 
         includeFederal: showRoads, 
         includeRegional: showRegionalRoads,
         signal: roadAbortRef.current.signal 
@@ -352,8 +307,7 @@ const MapView: React.FC<MapViewProps> = ({
   showRegionalRoads,
   onLoadingChange,
   mapTarget,
-  dimMap,
-  projectLoadTime
+  dimMap
 }) => {
   const [roadData, setRoadData] = useState<any>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -366,8 +320,7 @@ const MapView: React.FC<MapViewProps> = ({
   const processedStateRef = useRef({
     regions: selectedRegions.length,
     cities: selectedCities.length,
-    target: mapTarget,
-    lastProjectLoad: projectLoadTime
+    target: mapTarget
   });
 
   const updateProcessedState = useCallback((key: string, value: any) => {
@@ -415,7 +368,7 @@ const MapView: React.FC<MapViewProps> = ({
   };
 
   const roadKey = roadData 
-    ? `roads-${roadData.features.length}-${selectedRegions.length}-${selectedCities.length}` 
+    ? `roads-${roadData.features.length}-${(selectedCities[selectedCities.length-1]?.properties?.id || selectedRegions[selectedRegions.length-1]?.properties?.id || 'r')}` 
     : 'no-roads';
 
   return (
@@ -529,9 +482,8 @@ const MapView: React.FC<MapViewProps> = ({
           onLoadingChange={onLoadingChange}
           processedState={processedStateRef.current}
           updateProcessedState={updateProcessedState}
-          projectLoadTime={projectLoadTime}
         />
-        <MapAssets selectedRegions={selectedRegions} selectedCities={selectedCities} dimMap={dimMap} />
+        <MapAssets selectedRegions={selectedRegions} dimMap={dimMap} />
         <ScaleControl position="bottomright" />
       </MapContainer>
     </div>
