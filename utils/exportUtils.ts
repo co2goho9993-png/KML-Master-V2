@@ -27,8 +27,7 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
 
 async function captureMapTilesHighRes(map: L.Map, options: ExportOptions): Promise<string | null> {
   const size = map.getSize();
-  // Увеличиваем масштабный коэффициент до 8 для сверхвысокого разрешения (AI Ready)
-  const scaleFactor = 8; 
+  const scaleFactor = 6; 
   const width = Math.floor(size.x * scaleFactor);
   const height = Math.floor(size.y * scaleFactor);
 
@@ -38,25 +37,17 @@ async function captureMapTilesHighRes(map: L.Map, options: ExportOptions): Promi
   const finalCtx = finalCanvas.getContext('2d');
   if (!finalCtx) return null;
 
-  // Динамический выбор цвета фона для экспорта
-  finalCtx.fillStyle = options.mapMode === MapMode.DARK || options.mapMode === MapMode.NONE ? '#0a0a0a' : '#f4f1ed';
+  finalCtx.fillStyle = '#f4f1ed';
   finalCtx.fillRect(0, 0, width, height);
 
-  // Увеличиваем зум на +2 для получения 4-кратной детализации исходных данных (2^2 = 4)
-  const exportZoom = map.getZoom() + 2;
+  const exportZoom = map.getZoom() + 1;
   const bounds = map.getBounds();
   
   let urlTemplate = "";
   if (options.mapMode === MapMode.STREETS) {
     urlTemplate = "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&lang=ru_RU&scale=2";
-  } else if (options.mapMode === MapMode.BRIGHT_V2) {
-    // Voyager No Labels
-    urlTemplate = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png";
-  } else if (options.mapMode === MapMode.DARK) {
-    // Dark No Labels
-    urlTemplate = "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png";
   } else {
-    urlTemplate = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png";
+    urlTemplate = "https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png";
   }
 
   const nwPx = map.project(bounds.getNorthWest(), exportZoom);
@@ -74,27 +65,15 @@ async function captureMapTilesHighRes(map: L.Map, options: ExportOptions): Promi
   tCtx.imageSmoothingQuality = 'high';
 
   const tilePromises: Promise<any>[] = [];
-  const startX = Math.floor(nwPx.x / tileSize);
-  const endX = Math.floor(sePx.x / tileSize);
-  const startY = Math.floor(nwPx.y / tileSize);
-  const endY = Math.floor(sePx.y / tileSize);
-
-  for (let x = startX; x <= endX; x++) {
-    for (let y = startY; y <= endY; y++) {
-      const sub = ['a', 'b', 'c'][Math.abs(x + y) % 3];
-      const url = urlTemplate
-        .replace('{s}', sub)
-        .replace('{x}', x.toString())
-        .replace('{y}', y.toString())
-        .replace('{z}', exportZoom.toString())
-        .replace('{r}', ''); // Handle retina placeholders if any
-
+  for (let x = Math.floor(nwPx.x / tileSize); x <= Math.floor(sePx.x / tileSize); x++) {
+    for (let y = Math.floor(nwPx.y / tileSize); y <= Math.floor(sePx.y / tileSize); y++) {
+      const url = urlTemplate.replace('{x}', x.toString()).replace('{y}', y.toString()).replace('{z}', exportZoom.toString());
       tilePromises.push(loadImage(url).then(img => ({
         img,
         x: ((x * tileSize - nwPx.x) / totalWidthPx) * width,
         y: ((y * tileSize - nwPx.y) / totalHeightPx) * height,
-        w: (tileSize / totalWidthPx) * width + 1.2, // Небольшой нахлест для устранения микро-швов
-        h: (tileSize / totalHeightPx) * height + 1.2
+        w: (tileSize / totalWidthPx) * width + 1,
+        h: (tileSize / totalHeightPx) * height + 1
       })).catch(() => null));
     }
   }
@@ -106,12 +85,15 @@ async function captureMapTilesHighRes(map: L.Map, options: ExportOptions): Promi
     }
   });
 
+  if (options.mapMode === MapMode.GRAY_VECTOR) {
+    finalCtx.filter = 'grayscale(1) invert(0.9) brightness(0.9)';
+  }
+
   finalCtx.imageSmoothingEnabled = true;
   finalCtx.imageSmoothingQuality = 'high';
   finalCtx.drawImage(tileCanvas, 0, 0, width, height);
 
-  // Используем максимальное качество JPEG (1.0) для сохранения идеальной четкости
-  return finalCanvas.toDataURL('image/jpeg', 1.0);
+  return finalCanvas.toDataURL('image/jpeg', 0.98);
 }
 
 export async function exportMapToHighResSvg(map: L.Map, options: ExportOptions) {
@@ -158,7 +140,7 @@ export async function exportMapToHighResSvg(map: L.Map, options: ExportOptions) 
       <path d="M 0,8 L 8,0 M -2,2 L 2,-2 M 6,10 L 10,6" stroke="#C4A484" stroke-width="0.8" />
     </pattern>
   </defs>
-  <rect width="100%" height="100%" fill="${options.mapMode === MapMode.NONE || options.mapMode === MapMode.DARK ? '#0a0a0a' : '#f4f1ed'}" />`;
+  <rect width="100%" height="100%" fill="${options.mapMode === MapMode.NONE ? '#0a0a0a' : '#f4f1ed'}" />`;
 
   if (bgDataUrl) {
     svg += `<image xlink:href="${bgDataUrl}" width="${size.x}" height="${size.y}" x="0" y="0" />\n`;
@@ -259,6 +241,6 @@ export async function exportMapToHighResSvg(map: L.Map, options: ExportOptions) 
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `kml_master_4x_highres_${Date.now()}.svg`;
+  link.download = `kml_master_${Date.now()}.svg`;
   link.click();
 }

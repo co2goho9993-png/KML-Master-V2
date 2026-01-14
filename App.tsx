@@ -15,7 +15,6 @@ const App: React.FC = () => {
   const [showRegionalRoads, setShowRegionalRoads] = useState(false);
   const [dimMap, setDimMap] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mapTarget, setMapTarget] = useState<{lat: number, lon: number, bounds?: any, osmId?: number, osmType?: string} | null>(null);
 
   const handleAddKml = useCallback((name: string, geoJson: any) => {
@@ -92,10 +91,33 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleSaveProject = useCallback(() => {
+    const projectData: ProjectData = {
+      version: "1.1",
+      kmlLayers,
+      selectedRegions,
+      selectedCities,
+      settings: {
+        mapMode,
+        useMultiColor,
+        showRoads,
+        showRegionalRoads,
+        dimMap
+      }
+    };
+    const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `kml_project_${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [kmlLayers, selectedRegions, selectedCities, mapMode, useMultiColor, showRoads, showRegionalRoads, dimMap]);
+
   const handleLoadProject = useCallback((project: ProjectData) => {
-    setKmlLayers(project.kmlLayers || []);
-    setSelectedRegions(project.selectedRegions || []);
-    setSelectedCities(project.selectedCities || []);
+    if (project.kmlLayers) setKmlLayers(project.kmlLayers);
+    if (project.selectedRegions) setSelectedRegions(project.selectedRegions);
+    if (project.selectedCities) setSelectedCities(project.selectedCities);
     if (project.settings) {
       setMapMode(project.settings.mapMode);
       setUseMultiColor(project.settings.useMultiColor);
@@ -103,15 +125,11 @@ const App: React.FC = () => {
       setShowRegionalRoads(project.settings.showRegionalRoads);
       setDimMap(project.settings.dimMap);
     }
-    // Сброс цели карты, чтобы не было конфликтов
-    setMapTarget(null);
   }, []);
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden">
       <Sidebar 
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         kmlLayers={kmlLayers}
         onAddKml={handleAddKml}
         onRemoveKml={handleRemoveKml}
@@ -134,10 +152,11 @@ const App: React.FC = () => {
         onSetDimMap={setDimMap}
         isLoading={isLoading}
         onCitySelect={handleCitySelect}
+        onSaveProject={handleSaveProject}
         onLoadProject={handleLoadProject}
       />
       
-      <main className="flex-1 relative overflow-hidden">
+      <main className="flex-1 relative">
         <MapView 
           kmlLayers={kmlLayers}
           selectedRegions={selectedRegions}
@@ -156,7 +175,7 @@ const App: React.FC = () => {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[1000] flex items-center justify-center pointer-events-none">
             <div className="flex flex-col items-center gap-4 bg-[#111] p-8 rounded-3xl border border-[#222] shadow-2xl">
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-white font-bold tracking-tight">Обработка векторов OSM...</p>
+              <p className="text-white font-bold tracking-tight">Обработка данных OSM...</p>
             </div>
           </div>
         )}

@@ -17,16 +17,13 @@
             overflow: hidden;
         }
         
-        /* Устранение белых линий между тайлами */
+        /* Исправлено: удален margin: -0.5px, так как он вызывает накопление ошибки позиционирования */
         .leaflet-tile {
-            /* Отрицательный маржин и прозрачный аутлайн перекрывают микро-разрывы рендеринга */
-            margin: -0.5px !important;
             outline: 1px solid transparent;
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
         }
 
-        /* Дополнительная защита от швов в контейнере */
         .leaflet-tile-container {
             will-change: transform;
         }

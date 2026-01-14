@@ -19,14 +19,12 @@ export interface KmlLayerData {
 
 export enum MapMode {
   STREETS = 'streets',
-  BRIGHT_V2 = 'bright_v2',
-  DARK = 'dark',
+  GRAY_VECTOR = 'gray_vector',
   NONE = 'none'
 }
 
 export interface ProjectData {
   version: string;
-  timestamp: number;
   kmlLayers: KmlLayerData[];
   selectedRegions: any[];
   selectedCities: any[];
